@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Add the warehouse_qty_map field to the standard product template tree view -->
+    <record id="product_template_tree_view_add_warehouse_field" model="ir.ui.view">
+        <field name="name">product.template.tree.add.warehouse.field</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_tree_view"/>
+        <field name="arch" type="xml">
+            <!-- Add invisible field and js_class to make warehouse columns work -->
+            <xpath expr="//tree" position="attributes">
+                <attribute name="js_class">product_template_warehouse_list</attribute>
+            </xpath>
+            <xpath expr="//tree" position="inside">
+                <field name="warehouse_qty_map" column_invisible="1"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>
