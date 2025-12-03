@@ -5,13 +5,14 @@
     'summary': 'Display warehouse-specific quantities as dynamic columns in product list',
     'description': """
         This module dynamically displays warehouse-specific product quantities
-        in the product.template tree view.
+        in both product.template and product.product tree views.
 
         Features:
         - Automatically adds/removes columns when warehouses are created/deleted
         - No database schema changes required
         - No Odoo restart needed
         - Shows available quantity per warehouse for each product
+        - Works with both product templates and product variants
     """,
     'author': 'Sofiane',
     'license': 'AGPL-3',
@@ -22,6 +23,7 @@
     ],
     'data': [
         'views/product_template_view.xml',
+        'views/product_product_view.xml',
     ],
     'assets': {
         'web.assets_backend': [

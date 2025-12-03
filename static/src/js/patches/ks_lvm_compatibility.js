@@ -14,16 +14,19 @@ patch(ListRenderer.prototype, {
 
     setup() {
         super.setup(...arguments);
-
-        // Register dynamic warehouse fields with ks_list_view_manager if it's installed
-        if (this.ks_list_data && this.ks_list_data.fields_data) {
-            this._registerWarehouseFieldsWithKsLvm();
-        }
+        // Note: _registerWarehouseFieldsWithKsLvm will be called from populateWarehouseData
+        // No need to call it here during setup
     },
 
     _registerWarehouseFieldsWithKsLvm() {
-        // Check if this is a product.template list and has warehouse columns
-        if (this.props.list?.resModel !== 'product.template') {
+        // Only run if ks_list_view_manager is installed
+        if (!this.ks_list_data || !this.ks_list_data.fields_data) {
+            return;
+        }
+
+        // Check if this is a product.template or product.product list and has warehouse columns
+        const supportedModels = ['product.template', 'product.product'];
+        if (!this.props.list?.resModel || !supportedModels.includes(this.props.list.resModel)) {
             return;
         }
 

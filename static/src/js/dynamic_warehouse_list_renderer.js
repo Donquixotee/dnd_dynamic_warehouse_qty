@@ -26,7 +26,8 @@ export class DynamicWarehouseListRenderer extends ListRenderer {
     }
 
     populateWarehouseData(list) {
-        if (list?.resModel !== 'product.template' || !list?.records) {
+        const supportedModels = ['product.template', 'product.product'];
+        if (!list?.resModel || !supportedModels.includes(list.resModel) || !list?.records) {
             return;
         }
 
@@ -76,7 +77,8 @@ export class DynamicWarehouseListRenderer extends ListRenderer {
     getActiveColumns(list) {
         const baseActive = super.getActiveColumns(list);
 
-        if (list?.resModel !== 'product.template') {
+        const supportedModels = ['product.template', 'product.product'];
+        if (!list?.resModel || !supportedModels.includes(list.resModel)) {
             return baseActive;
         }
 
@@ -91,7 +93,8 @@ export class DynamicWarehouseListRenderer extends ListRenderer {
     processAllColumn(allColumns, list) {
         const baseProcessed = super.processAllColumn(allColumns, list);
 
-        if (list?.resModel !== 'product.template') {
+        const supportedModels = ['product.template', 'product.product'];
+        if (!list?.resModel || !supportedModels.includes(list.resModel)) {
             return baseProcessed;
         }
 
@@ -239,4 +242,11 @@ export const ProductTemplateWarehouseListView = {
     Renderer: DynamicWarehouseListRenderer,
 };
 
+export const ProductProductWarehouseListView = {
+    ...listView,
+    type: "product_product_warehouse_list",
+    Renderer: DynamicWarehouseListRenderer,
+};
+
 registry.category("views").add("product_template_warehouse_list", ProductTemplateWarehouseListView);
+registry.category("views").add("product_product_warehouse_list", ProductProductWarehouseListView);
