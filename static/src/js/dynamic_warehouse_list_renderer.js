@@ -3,13 +3,15 @@
 import { ListRenderer } from "@web/views/list/list_renderer";
 import { listView } from "@web/views/list/list_view";
 import { registry } from "@web/core/registry";
-import { onWillUpdateProps } from "@odoo/owl";
+import { onWillUpdateProps, useState } from "@odoo/owl";
+import { formatFloat } from "@web/core/utils/numbers";
 
 export class DynamicWarehouseListRenderer extends ListRenderer {
 
     setup() {
         super.setup();
         this.warehouseColumns = [];
+        this.warehouseSortState = useState({ column: null, asc: true });
 
         // Populate record.data with warehouse values on initial setup
         this.populateWarehouseData(this.props.list);
@@ -22,6 +24,11 @@ export class DynamicWarehouseListRenderer extends ListRenderer {
             // Repopulate record.data for warehouse columns when props change
             // This handles search, filters, grouping, and pagination
             this.populateWarehouseData(nextProps.list);
+
+            // Re-apply active warehouse sort on the fresh record set
+            if (this.warehouseSortState.column) {
+                this._applyWarehouseSort(nextProps.list.records);
+            }
         });
     }
 
@@ -133,9 +140,57 @@ export class DynamicWarehouseListRenderer extends ListRenderer {
 
     isSortable(column) {
         if (column.name && column.name.startsWith('warehouse_')) {
-            return false;
+            return true;
         }
         return super.isSortable(column);
+    }
+
+    // The actual click handler in Odoo 17 is onClickSortColumn, not onSortColumn.
+    // We override it to intercept warehouse columns and sort client-side only,
+    // preventing list.sortBy() from issuing a server request with a non-existent field.
+    onClickSortColumn(column) {
+        if (column.name && column.name.startsWith('warehouse_')) {
+            if (this.warehouseSortState.column === column.name) {
+                this.warehouseSortState.asc = !this.warehouseSortState.asc;
+            } else {
+                this.warehouseSortState.column = column.name;
+                this.warehouseSortState.asc = true;
+            }
+            this._applyWarehouseSort(this.props.list.records);
+            return;
+        }
+        // Sorting by a regular column — clear warehouse sort state
+        this.warehouseSortState.column = null;
+        super.onClickSortColumn(column);
+    }
+
+    // Override the sort arrow icon to reflect our client-side sort state
+    // (the parent reads from list.orderBy which won't contain warehouse fields)
+    getSortableIconClass(column) {
+        if (column.name && column.name.startsWith('warehouse_')) {
+            const isActive = this.warehouseSortState.column === column.name;
+            const classNames = ['fa', 'fa-lg'];
+            if (isActive) {
+                classNames.push(this.warehouseSortState.asc ? 'fa-angle-up' : 'fa-angle-down');
+            } else {
+                classNames.push('fa-angle-down', 'opacity-0', 'opacity-75-hover');
+            }
+            return classNames.join(' ');
+        }
+        return super.getSortableIconClass(column);
+    }
+
+    _applyWarehouseSort(records) {
+        if (!records || !this.warehouseSortState.column) {
+            return;
+        }
+        const whId = this.warehouseSortState.column.replace('warehouse_', '');
+        const asc = this.warehouseSortState.asc;
+        records.sort((a, b) => {
+            const qtyA = a.data.warehouse_qty_map?.[whId]?.qty ?? 0;
+            const qtyB = b.data.warehouse_qty_map?.[whId]?.qty ?? 0;
+            return asc ? qtyA - qtyB : qtyB - qtyA;
+        });
     }
 
     getFieldFromRecord(record, fieldName) {
@@ -220,12 +275,8 @@ export class DynamicWarehouseListRenderer extends ListRenderer {
     getFormattedValue(column, record) {
         if (column.name && column.name.startsWith('warehouse_')) {
             const whId = column.name.replace('warehouse_', '');
-            const warehouseQtyMap = record.data.warehouse_qty_map;
-
-            if (warehouseQtyMap && warehouseQtyMap[whId]) {
-                return warehouseQtyMap[whId].qty || 0;
-            }
-            return 0;
+            const qty = record.data.warehouse_qty_map?.[whId]?.qty ?? 0;
+            return formatFloat(qty, { digits: [16, 2] });
         }
 
         return super.getFormattedValue(column, record);

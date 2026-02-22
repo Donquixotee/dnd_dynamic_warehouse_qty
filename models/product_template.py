@@ -1,4 +1,3 @@
-import json
 from odoo import api, fields, models
 
 
@@ -16,16 +15,42 @@ class ProductTemplate(models.Model):
                  'product_variant_ids.stock_quant_ids.location_id',
                  'product_variant_ids.stock_quant_ids.reserved_quantity')
     def _compute_warehouse_qty_map(self):
-        StockQuant = self.env['stock.quant']
         warehouses = self.env['stock.warehouse'].search([])
+        if not warehouses:
+            for template in self:
+                template.warehouse_qty_map = {}
+            return
+
+        # Collect all variant IDs across all templates in the recordset
+        all_variant_ids = self.product_variant_ids.ids
+        template_variant_map = {t.id: t.product_variant_ids.ids for t in self}
+
+        # Build result map: {template_id: {wh_id: entry}}
+        template_wh_qty = {t.id: {} for t in self}
+        StockQuant = self.env['stock.quant']
+        for wh in warehouses:
+            groups = StockQuant._read_group(
+                domain=[
+                    ('product_id', 'in', all_variant_ids),
+                    ('location_id', 'child_of', wh.lot_stock_id.id),
+                    ('location_id.usage', '=', 'internal'),
+                ],
+                groupby=['product_id'],
+                aggregates=['quantity:sum', 'reserved_quantity:sum'],
+            )
+            # Aggregate per-variant qty back up to template level
+            variant_qtys = {
+                product_rec.id: qty_sum - reserved_sum
+                for product_rec, qty_sum, reserved_sum in groups
+            }
+            for template in self:
+                total = sum(variant_qtys.get(vid, 0) for vid in template_variant_map[template.id])
+                template_wh_qty[template.id][str(wh.id)] = {'name': wh.name, 'qty': total}
 
         for template in self:
             qty_map = {}
-            product_variant = template.product_variant_id
-            if not product_variant:
-                template.warehouse_qty_map = {}
-                continue
-            for warehouse in warehouses:
-                qty = StockQuant._get_available_quantity(product_variant,warehouse.lot_stock_id,allow_negative=True)
-                qty_map[str(warehouse.id)] = {'name': warehouse.name,'qty': qty}
+            for wh in warehouses:
+                qty_map[str(wh.id)] = template_wh_qty[template.id].get(
+                    str(wh.id), {'name': wh.name, 'qty': 0}
+                )
             template.warehouse_qty_map = qty_map
