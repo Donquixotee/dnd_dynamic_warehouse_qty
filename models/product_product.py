@@ -42,10 +42,24 @@ class ProductProduct(models.Model):
                         'qty': qty_sum - reserved_sum,
                     }
 
+        # Batch-fetch reorder rules: {(product_id, warehouse_id): min_qty}
+        orderpoints = self.env['stock.warehouse.orderpoint'].search_read(
+            [('product_id', 'in', self.ids)],
+            ['product_id', 'warehouse_id', 'product_min_qty'],
+        )
+        orderpoint_map = {
+            (op['product_id'][0], op['warehouse_id'][0]): op['product_min_qty']
+            for op in orderpoints
+        }
+
         for product in self:
             qty_map = {}
             for wh in warehouses:
-                qty_map[str(wh.id)] = product_wh_qty[product.id].get(
+                entry = product_wh_qty[product.id].get(
                     str(wh.id), {'name': wh.name, 'qty': 0}
                 )
+                min_qty = orderpoint_map.get((product.id, wh.id))
+                if min_qty is not None:
+                    entry['min_qty'] = min_qty
+                qty_map[str(wh.id)] = entry
             product.warehouse_qty_map = qty_map

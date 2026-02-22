@@ -265,6 +265,29 @@ export class DynamicWarehouseListRenderer extends ListRenderer {
         return super.getCellTitle(column, record);
     }
 
+    getCellClass(column, record) {
+        const base = super.getCellClass(column, record);
+        if (column.name && column.name.startsWith('warehouse_')) {
+            const whId = column.name.replace('warehouse_', '');
+            const whData = record.data.warehouse_qty_map?.[whId];
+            if (!whData) return base;
+
+            const qty = whData.qty ?? 0;
+            const minQty = whData.min_qty ?? null;
+
+            let colorClass = '';
+            if (qty <= 0) {
+                colorClass = 'text-danger';
+            } else if (minQty !== null && qty < minQty) {
+                colorClass = 'text-warning';
+            } else if (minQty !== null) {
+                colorClass = 'text-success';
+            }
+            return colorClass ? `${base} ${colorClass}` : base;
+        }
+        return base;
+    }
+
     canUseFormatter(column, record) {
         if (column.name && column.name.startsWith('warehouse_')) {
             return true;

@@ -47,10 +47,38 @@ class ProductTemplate(models.Model):
                 total = sum(variant_qtys.get(vid, 0) for vid in template_variant_map[template.id])
                 template_wh_qty[template.id][str(wh.id)] = {'name': wh.name, 'qty': total}
 
+        # Batch-fetch reorder rules for all variants, keyed by (template_id, warehouse_id)
+        # Use the minimum min_qty across all variants of a template (most conservative threshold)
+        orderpoints = self.env['stock.warehouse.orderpoint'].search_read(
+            [('product_id', 'in', all_variant_ids)],
+            ['product_id', 'warehouse_id', 'product_min_qty'],
+        )
+        # Build reverse map: variant_id → template_id
+        variant_to_tmpl = {
+            vid: tmpl_id
+            for tmpl_id, vids in template_variant_map.items()
+            for vid in vids
+        }
+        tmpl_wh_min = {}  # {(template_id, warehouse_id): min_qty}
+        for op in orderpoints:
+            vid = op['product_id'][0]
+            wid = op['warehouse_id'][0]
+            tmpl_id = variant_to_tmpl.get(vid)
+            if tmpl_id is None:
+                continue
+            key = (tmpl_id, wid)
+            current = tmpl_wh_min.get(key)
+            if current is None or op['product_min_qty'] < current:
+                tmpl_wh_min[key] = op['product_min_qty']
+
         for template in self:
             qty_map = {}
             for wh in warehouses:
-                qty_map[str(wh.id)] = template_wh_qty[template.id].get(
+                entry = template_wh_qty[template.id].get(
                     str(wh.id), {'name': wh.name, 'qty': 0}
                 )
+                min_qty = tmpl_wh_min.get((template.id, wh.id))
+                if min_qty is not None:
+                    entry['min_qty'] = min_qty
+                qty_map[str(wh.id)] = entry
             template.warehouse_qty_map = qty_map
